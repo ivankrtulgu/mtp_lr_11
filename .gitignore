@@ -1,0 +1,7 @@
+target
+venv
+*.exe
+__pycache__
+.env
+.qwen
+.pytest_cache
