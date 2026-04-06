@@ -148,3 +148,42 @@ FAILED test_main.py::TestUsersEndpoints::test_create_user_with_empty_name - asse
 - **Количество промптов:** 1
 - **Что пришлось исправлять вручную:** Пришлось билдить контейнер docker run -d --name axum-service -p 3000:3000 rust-axum-app:latest и проверять запросы к сервису командами curl http://localhost:3000/ curl http://localhost:3000/health.
 - **Время:** ~15 мин
+
+
+## Задание 9: Ограничить ресурсы (CPU, память) для контейнеров.
+
+### Промпт 1
+**Инструмент:** Qwen Code
+**Промпт:**
+```
+Выполняй задание в новой папке @Task9/ Действуй как эксперт по Docker. У меня есть задание по контейнеризации Python-приложения (@Task1/). Мне необходимо внедрить жесткие ограничения на потребление ресурсов для этого контейнера. 
+
+Требования:
+Ограничь использование оперативной памяти (RAM) до 512MB.
+Ограничь использование процессора (CPU) до 0.5 (50% одного ядра).
+
+Реализуй это двумя способами:
+— Обнови мой docker-compose.yml, добавив блок deploy с лимитами и резервированием.
+— Напиши готовую команду docker run со всеми необходимыми флагами.
+
+Напиши только код и краткое пояснение, как проверить примененные лимиты через docker stats.
+```
+
+**Результат:** Создана конфигурация контейнеризации с жёсткими ограничениями ресурсов для Python/FastAPI приложения. Реализовано два способа: обновлённый docker-compose.yml с блоком deploy.resources (лимиты: 512M RAM, 0.5 CPU; резервирование: 256M RAM, 0.25 CPU) и готовая команда docker run с флагами --memory, --memory-reservation, --cpus. Проверка лимитов выполняется через docker stats и docker inspect.
+
+### Итого
+- **Количество промптов:** 1
+- **Что пришлось исправлять вручную:** Пришлось билдить контейнер docker compose up -d, затем вручную с помощью команды docker stats mtp-limited-app смотреть статистику работы контейнера и потребление ресурсов, были получены следующие результаты:
+```
+CONTAINER ID   NAME              CPU %     MEM USAGE / LIMIT   MEM %     NET I/O         BLOCK I/O         PIDS
+2f2d86978ba6   mtp-limited-app   0.17%     64.1MiB / 512MiB    12.52%    1.75kB / 126B   49.9MB / 65.5kB   1
+```
+Далее, с помощью команд docker inspect mtp-limited-app --format='{{.HostConfig.Memory}}' и docker inspect mtp-limited-app --format='{{.HostConfig.NanoCpus}}', были получены следующие результаты:
+```
+(venv) PS D:\Workspace\MTP_lab11\proj\Task9> docker inspect mtp-limited-app --format='{{.HostConfig.Memory}}' 
+536870912
+(venv) PS D:\Workspace\MTP_lab11\proj\Task9> docker inspect mtp-limited-app --format='{{.HostConfig.NanoCpus}}'
+500000000
+(venv) PS D:\Workspace\MTP_lab11\proj\Task9> 
+```
+- **Время:** ~10 мин
