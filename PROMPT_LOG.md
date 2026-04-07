@@ -237,3 +237,56 @@ go-microservice:latest   5b43c31cd940       7.48MB         2.29MB    U
 PS D:\Workspace\MTP_lab11\proj\Task_hard1> 
 ```
 - **Время:** ~25 мин
+
+
+## Задание 3(Hard): Настроить CI/CD, который собирает и пушит образы для всех трёх языков.
+
+### Промпт 1
+**Инструмент:** Qwen Code
+**Промпт:**
+```
+Техническое задание: Настройка CI/CD пайплайна для мультиязычного монорепозитория (Python, Go, Rust)
+
+Роль: Ты — Lead DevOps инженер.
+Задача: Создать единый GitHub Actions Workflow (`main.yml`), который автоматически собирает, тестирует и пушит Docker-образы в Docker Hub для трёх разных сервисов.
+
+Структура проекта:
+- `@Task1/` (Python/FastAPI)
+- `@Task_hard1/` (Go - статическая сборка в scratch)
+- `@Task3/` (Rust - оптимизированная сборка)
+
+Требования к Pipeline (CI/CD):
+1. Триггеры: Запуск при каждом `push` в ветку `main` или при создании `pull_request`.
+2. Безопасность (Secrets): Использовать GitHub Secrets для хранения `DOCKERHUB_USERNAME` и `DOCKERHUB_TOKEN`. Никаких открытых данных в коде.
+3. Оптимизация (Matrix Strategy): Реализовать сборку через `strategy: matrix`, чтобы минимизировать дублирование кода и запускать сборки параллельно.
+4. Этапы для каждого языка:
+   - Lint/Test: Перед сборкой образа запустить тесты (pytest для Python, go test для Go, cargo test для Rust). Если тесты упали — пайплайн стопится.
+   - Docker Build & Push: Использовать `docker/build-push-action@v5`. 
+   - Тегирование: Использовать два тега: `latest` и короткий SHA коммита (`${{ github.sha }}`).
+5. Специфика сборки:
+   - Для Go: Убедиться, что билд идет в контексте multi-stage.
+   - Для Rust: Настроить кэширование зависимостей (`actions/cache`), чтобы сборка не занимала 20 минут каждый раз.
+   - Для Python: Проверить наличие `.dockerignore`, чтобы не копировать `venv` в образ.
+
+Ожидаемый результат:
+1. Полный код файла `.github/workflows/main.yml`.
+2. Список секретов, которые нужно добавить в настройки GitHub (Settings -> Secrets).
+3. Инструкция, как проверить статус сборки и где найти готовые образы в Docker Hub.
+4. Краткое пояснение: как этот пайплайн помогает соблюсти "чистоту" кода и гарантировать, что в продакшн (Docker Hub) попадет только протестированный бинарник.
+
+Формат вывода: Только структурированный YAML код и краткий чек-лист по настройке.
+```
+
+**Результат:** Создан единый GitHub Actions Workflow (.github/workflows/main.yml) для мультиязычного монорепозитория с матричной стратегией (strategy:  matrix), обеспечивающий параллельную сборку, тестирование и публикацию Docker-образов в Docker Hub для трёх сервисов: Python/FastAPI (Task1/), Go (Task_hard1/), Rust (Task3/). Реализованы этапы lint/test перед сборкой (flake8 / go vet / cargo clippy, pytest / go test -race / cargo test), при провале любого теста пайплайн останавливается (fail-fast: true). Docker-образы пушатся с двумя тегами: latest и короткий SHA коммита (${{ github.sha }}  | cut -c1-7). Для Go подтверждена multi-stage сборка в scratch-образ, для Rust настроено кэширование зависимостей через actions/cache с ключом по Cargo.lock, для Python проверено наличие .dockerignore (исключает __pycache__, .pytest_cache, *.db). Безопасность обеспечена через GitHub Secrets (DOCKERHUB_USERNAME, DOCKERHUB_TOKEN) — никаких открытых кредов в коде. Push образов происходит только при push в main; при pull_request выполняются только lint/test/build без push.
+
+### Итого
+- **Количество промптов:** 1
+- **Что пришлось исправлять вручную:** 
+1. Добавил components: clippy в шаг установки Rust.
+2. Была выполнена настройка GitHub Secrets в репозитории: Settings → Secrets and variables → Actions → New repository secret. Добавлены два секрета:
+  DOCKERHUB_USERNAME (имя пользователя Docker Hub) и DOCKERHUB_TOKEN (Personal Access Token, сгенерированный на Docker Hub → Account Settings → Security → Access Tokens → Generate New Token).
+3. Был выполнен пуш изменений в репозиторий командой git add . && git commit -m "add CI/CD pipeline" && git push origin main, после чего в GitHub → вкладка Actions была запущена сборка пайплайна CI/CD Pipeline.
+4. Визуально подтверждено, что все три матричных джоба (python, go, rust) запустились параллельно и прошли успешно: lint (flake8 / go vet / cargo clippy), тесты (pytest / go test -race / cargo test), Docker Build & Push.
+5. После добавления секретов был запущен тестовый пуш в ветку main для проверки корректности авторизации docker/login-action@v3 — сборка прошла успешно, образы запушены в Docker Hub.
+6. На вкладке Docker Hub → Repositories проверено наличие образов с тегами latest и коротким SHA коммита.
+- **Время:** ~35 мин
