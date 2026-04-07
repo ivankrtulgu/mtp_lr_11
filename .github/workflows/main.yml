@@ -1,0 +1,163 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: docker.io
+  PYTHON_IMAGE: "${{ secrets.DOCKERHUB_USERNAME }}/fastapi-app"
+  GO_IMAGE: "${{ secrets.DOCKERHUB_USERNAME }}/go-app"
+  RUST_IMAGE: "${{ secrets.DOCKERHUB_USERNAME }}/rust-app"
+
+jobs:
+  build-and-test:
+    name: Build, Test & Push - ${{ matrix.service }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        service: [python, go, rust]
+      fail-fast: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (short SHA)
+        id: meta
+        run: echo "sha_short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      # ============================================================
+      # PYTHON SERVICE
+      # ============================================================
+      - name: Set up Python (Python Service)
+        if: matrix.service == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies (Python)
+        if: matrix.service == 'python'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r Task1/requirements.txt
+
+      - name: Run linter (Python)
+        if: matrix.service == 'python'
+        run: |
+          pip install flake8
+          flake8 Task1/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 Task1/ --count --exit-zero --max-complexity=10 --max-line-length=120 --statistics
+
+      - name: Run tests (Python)
+        if: matrix.service == 'python'
+        run: |
+          pytest Task1/test_main.py -v --tb=short
+
+      - name: Build and push Docker image (Python)
+        if: matrix.service == 'python'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Task1
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ env.PYTHON_IMAGE }}:latest
+            ${{ env.PYTHON_IMAGE }}:${{ steps.meta.outputs.sha_short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ============================================================
+      # GO SERVICE
+      # ============================================================
+      - name: Set up Go (Go Service)
+        if: matrix.service == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: Task_hard1/go.sum
+
+      - name: Run linter (Go)
+        if: matrix.service == 'go'
+        run: |
+          cd Task_hard1
+          go vet ./...
+
+      - name: Run tests (Go)
+        if: matrix.service == 'go'
+        run: |
+          cd Task_hard1
+          go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Build and push Docker image (Go)
+        if: matrix.service == 'go'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Task_hard1
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ env.GO_IMAGE }}:latest
+            ${{ env.GO_IMAGE }}:${{ steps.meta.outputs.sha_short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ============================================================
+      # RUST SERVICE
+      # ============================================================
+      - name: Cache Rust dependencies
+        if: matrix.service == 'rust'
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            Task3/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Task3/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Set up Rust (Rust Service)
+        if: matrix.service == 'rust'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.83
+          components: clippy
+
+      - name: Run linter (Rust)
+        if: matrix.service == 'rust'
+        run: |
+          cd Task3
+          cargo clippy -- -D warnings
+
+      - name: Run tests (Rust)
+        if: matrix.service == 'rust'
+        run: |
+          cd Task3
+          cargo test --verbose
+
+      - name: Build and push Docker image (Rust)
+        if: matrix.service == 'rust'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./Task3
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ env.RUST_IMAGE }}:latest
+            ${{ env.RUST_IMAGE }}:${{ steps.meta.outputs.sha_short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
